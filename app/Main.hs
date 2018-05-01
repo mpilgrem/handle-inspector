@@ -5,7 +5,7 @@ module Main where
 
 import Control.Exception (Exception, SomeException(..), throw, try)
 import Control.Monad (when)
-import Data.Bits ((.&.))
+import Data.Bits ((.&.), (.|.))
 import Data.Typeable (Typeable)
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
@@ -34,8 +34,13 @@ main = do
     mmode <- conHostConsoleMode soh
     case mmode of
       Nothing -> putStrLn "No Console Mode?"
-      Just mode -> putStrLn $ "Console Mode - EVTP: " ++
-        show (isEnableVTProcessing mode)
+      Just mode -> do
+        putStrLn $ "Console Mode - EVTP: " ++ show (isEnableVTProcessing mode)
+        let mode' = mode .|. eNABLE_VIRTUAL_TERMINAL_PROCESSING
+        mOk <- changeConHostConsoleMode soh mode'
+        case mOk of
+          Nothing -> putStrLn "Unable to change mode."
+          Just _ -> putStrLn "Mode changed!"
   trm <- lookupTERM
   putStrLn $ "TERM: " ++ show trm
 
@@ -51,6 +56,13 @@ conHostConsoleMode h = do
   case result of
     Left _ -> return Nothing
     Right mode -> return (Just mode)
+
+changeConHostConsoleMode :: HANDLE -> DWORD -> IO (Maybe ())
+changeConHostConsoleMode h mode = do
+  result <- try (setConsoleMode h mode) :: IO (Either SomeException ())
+  case result of
+    Left _ -> return Nothing
+    Right _ -> return (Just ())
 
 isEnableVTProcessing :: DWORD -> Bool
 isEnableVTProcessing mode = mode .&. eNABLE_VIRTUAL_TERMINAL_PROCESSING /= 0
@@ -73,6 +85,13 @@ getConsoleMode :: HANDLE -> IO DWORD
 getConsoleMode handle = alloca $ \ptr_mode -> do
   throwIfFalse $ cGetConsoleMode handle ptr_mode
   peek ptr_mode
+
+foreign import WINDOWS_CCONV unsafe "windows.h SetConsoleMode"
+  cSetConsoleMode :: HANDLE -> DWORD -> IO BOOL
+
+setConsoleMode :: HANDLE -> DWORD -> IO ()
+setConsoleMode handle attributes
+  = throwIfFalse $ cSetConsoleMode handle attributes
 
 throwIfFalse :: IO Bool -> IO ()
 throwIfFalse action = do
