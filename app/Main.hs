@@ -10,10 +10,13 @@ import Data.Typeable (Typeable)
 import Foreign.Marshal (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (Storable (..))
+import System.Console.MinTTY (isMinTTYHandle)
 import System.Environment (lookupEnv)
-import System.IO(stderr, stdout)
+import System.IO(hIsTerminalDevice, stderr, stdout)
 import System.Win32.Types (BOOL, DWORD, ErrCode, HANDLE, getLastError,
-  iNVALID_HANDLE_VALUE, nullHANDLE)
+  iNVALID_HANDLE_VALUE, nullHANDLE, withHandleToHANDLE)
+
+import System.Console.ANSI (hSupportsANSI)
 
 #if defined(i386_HOST_ARCH)
 #define WINDOWS_CCONV stdcall
@@ -28,8 +31,20 @@ main = do
   putStrLn "Inspecting handle and environment"
   putStrLn "---------------------------------"
   putStr "\n"
+  isTDOut <- hIsTerminalDevice stdout
+  putStrLn $ "hIsTerminalDevice stdout: " ++ show isTDOut
+  isTDErr <- hIsTerminalDevice stderr
+  putStrLn $ "hIsTerminalDevice stderr: " ++ show isTDErr
+  withHandleToHANDLE stdout (\h -> putStrLn $ "stdout: " ++ show h)
+  withHandleToHANDLE stderr (\h -> putStrLn $ "stderr: " ++ show h)
+  isMTOut <- withHandleToHANDLE stdout isMinTTYHandle
+  putStrLn $ "isMinTTYHandle stdout: " ++ show isMTOut
+  isMTErr <- withHandleToHANDLE stderr isMinTTYHandle
+  putStrLn $ "isMinTTYHandle stderr: " ++ show isMTErr
   soh <- getStdHandle sTD_OUTPUT_HANDLE
   putStrLn $ "STD_OUTPUT_HANDLE: " ++ show soh
+  seh <- getStdHandle sTD_ERROR_HANDLE
+  putStrLn $ "STD_ERROR_HANDLE: " ++ show seh
   when ((soh /= iNVALID_HANDLE_VALUE) && (soh /= nullHANDLE)) $ do
     mmode <- conHostConsoleMode soh
     case mmode of
@@ -43,6 +58,11 @@ main = do
           Just _ -> putStrLn "Mode changed!"
   trm <- lookupTERM
   putStrLn $ "TERM: " ++ show trm
+  isSAOut <- hSupportsANSI stdout
+  putStrLn $ "hSupportsANSI stdout: " ++ show isSAOut
+  isSAErr <- hSupportsANSI stderr
+  putStrLn $ "hSupportsANSI stderr: " ++ show isSAErr
+
 
 
 foreign import WINDOWS_CCONV unsafe "windows.h GetStdHandle"
